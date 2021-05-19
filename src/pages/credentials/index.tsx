@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import styled from 'styled-components';
 
 import constants from 'utils/strings/constants';
 import { getData, LS_KEYS } from 'utils/storage/localStorage';
 import { useRouter } from 'next/router';
 import { KeyAttributes } from 'types';
 import { SESSION_KEYS, getKey } from 'utils/storage/sessionStorage';
-import CryptoWorker, {
+import {
     generateAndSaveIntermediateKeyAttributes,
     setSessionKeys,
+    verifyPassphrase,
 } from 'utils/crypto';
 import { logoutUser } from 'services/userService';
 import { isFirstLogin } from 'utils/storage';
@@ -36,40 +36,20 @@ export default function Credentials() {
         }
     }, []);
 
-    const verifyPassphrase = async (passphrase, setFieldError) => {
+    const signIn = async (passphrase, setFieldError) => {
         try {
-            const cryptoWorker = await new CryptoWorker();
-            const kek: string = await cryptoWorker.deriveKey(
-                passphrase,
-                keyAttributes.kekSalt,
-                keyAttributes.opsLimit,
-                keyAttributes.memLimit
-            );
-
-            try {
-                const key: string = await cryptoWorker.decryptB64(
-                    keyAttributes.encryptedKey,
-                    keyAttributes.keyDecryptionNonce,
-                    kek
+            const key = await verifyPassphrase(passphrase, keyAttributes);
+            if (isFirstLogin()) {
+                generateAndSaveIntermediateKeyAttributes(
+                    passphrase,
+                    keyAttributes,
+                    key
                 );
-                if (isFirstLogin()) {
-                    generateAndSaveIntermediateKeyAttributes(
-                        passphrase,
-                        keyAttributes,
-                        key
-                    );
-                }
-                setSessionKeys(key);
-                router.push('/gallery');
-            } catch (e) {
-                console.error(e);
-                setFieldError('passphrase', constants.INCORRECT_PASSPHRASE);
             }
+            setSessionKeys(key);
+            router.push('/gallery');
         } catch (e) {
-            setFieldError(
-                'passphrase',
-                `${constants.UNKNOWN_ERROR} ${e.message}`
-            );
+            setFieldError('passphrase', e.message);
         }
     };
 

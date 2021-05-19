@@ -106,3 +106,17 @@ export const isTokenValid = async () => {
         return false;
     }
 };
+
+export const deleteUser = async () => {
+    try {
+        const response = await HTTPService.delete(
+            `${ENDPOINT}/users`,
+            null,
+            null,
+            { 'X-Auth-Token': getToken() }
+        );
+        return response['isSubscriptionCancelled'];
+    } catch (e) {
+        throw e;
+    }
+};

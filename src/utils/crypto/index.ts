@@ -7,6 +7,8 @@ import { SESSION_KEYS, setKey } from 'utils/storage/sessionStorage';
 import { getData, LS_KEYS, setData } from 'utils/storage/localStorage';
 import { getActualKey, getToken } from 'utils/common/key';
 import { SetRecoveryKey } from 'services/userService';
+import { isFirstLogin } from 'utils/storage';
+import constants from 'utils/strings/constants';
 
 const CryptoWorker: any =
     runningInBrowser() &&
@@ -22,15 +24,14 @@ export async function generateAndSaveIntermediateKeyAttributes(
     key
 ) {
     const cryptoWorker = await new CryptoWorker();
-    const intermediateKekSalt: string = await cryptoWorker.generateSaltToDeriveKey();
+    const intermediateKekSalt: string =
+        await cryptoWorker.generateSaltToDeriveKey();
     const intermediateKek: KEK = await cryptoWorker.deriveIntermediateKey(
         passphrase,
         intermediateKekSalt
     );
-    const encryptedKeyAttributes: B64EncryptionResult = await cryptoWorker.encryptToB64(
-        key,
-        intermediateKek.key
-    );
+    const encryptedKeyAttributes: B64EncryptionResult =
+        await cryptoWorker.encryptToB64(key, intermediateKek.key);
 
     const updatedKeyAttributes = Object.assign(existingKeyAttributes, {
         kekSalt: intermediateKekSalt,
@@ -83,14 +84,10 @@ async function createNewRecoveryKey() {
     const cryptoWorker = await new CryptoWorker();
 
     const recoveryKey = await cryptoWorker.generateEncryptionKey();
-    const encryptedMasterKey: B64EncryptionResult = await cryptoWorker.encryptToB64(
-        masterKey,
-        recoveryKey
-    );
-    const encryptedRecoveryKey: B64EncryptionResult = await cryptoWorker.encryptToB64(
-        recoveryKey,
-        masterKey
-    );
+    const encryptedMasterKey: B64EncryptionResult =
+        await cryptoWorker.encryptToB64(masterKey, recoveryKey);
+    const encryptedRecoveryKey: B64EncryptionResult =
+        await cryptoWorker.encryptToB64(recoveryKey, masterKey);
     const recoveryKeyAttributes = {
         masterKeyEncryptedWithRecoveryKey: encryptedMasterKey.encryptedData,
         masterKeyDecryptionNonce: encryptedMasterKey.nonce,
@@ -107,4 +104,34 @@ async function createNewRecoveryKey() {
 
     return recoveryKey;
 }
+
+export const verifyPassphrase = async (
+    passphrase: string,
+    keyAttributes: KeyAttributes
+) => {
+    try {
+        const cryptoWorker = await new CryptoWorker();
+        const kek: string = await cryptoWorker.deriveKey(
+            passphrase,
+            keyAttributes.kekSalt,
+            keyAttributes.opsLimit,
+            keyAttributes.memLimit
+        );
+
+        try {
+            const key: string = await cryptoWorker.decryptB64(
+                keyAttributes.encryptedKey,
+                keyAttributes.keyDecryptionNonce,
+                kek
+            );
+            return key;
+        } catch (e) {
+            console.warn(e);
+            new Error(constants.INCORRECT_PASSPHRASE);
+        }
+    } catch (e) {
+        console.error(e);
+        new Error(`${constants.UNKNOWN_ERROR} ${e.message}`);
+    }
+};
 export default CryptoWorker;

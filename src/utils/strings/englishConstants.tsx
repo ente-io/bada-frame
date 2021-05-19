@@ -296,6 +296,39 @@ const englishConstants = {
     SHARING_BAD_REQUEST_ERROR: 'sharing album not allowed',
     SHARING_DISABLED_FOR_FREE_ACCOUNTS: 'sharing is disabled for free accounts',
     CREATE_ALBUM_FAILED: 'failed to create album , please try again',
+    CONFIRM_ACCOUNT_DELETE: 'account deletion confirmation',
+    CONFIRM_ACCOUNT_DELETE_MESSAGE: () => (
+        <>
+            <p>
+                this action
+                <strong>
+                    {' '}
+                    <u>cannot</u>
+                </strong>{' '}
+                be undone
+            </p>
+            <p>
+                {' '}
+                this will{' '}
+                <strong>
+                    {' '}
+                    <u> permanently delete</u>{' '}
+                </strong>
+                all your data from ente
+            </p>
+            <p>
+                are you absolutely sure you want to
+                <strong> delete </strong>
+                your account
+            </p>
+        </>
+    ),
+    DELETE_ACCOUNT_BUTTON: 'delete account',
+    DELETE_ACCOUNT: 'i understand the consequences , delete my account',
+    DELETE_WARNING: 'DANGER ZONE !!',
+    ACCOUNT_DELETED: 'your account and data was successfully deleted',
+    SUBSCRIPTION_CANCELLED_PENDING:
+        'we were unable to cancel your subscription, please do that manually from your mobile app store',
 };
 
 export default englishConstants;
