@@ -24,9 +24,9 @@ class DownloadManager {
             if (!this.thumbnailDownloads.get(file.id)) {
                 const download = (async () => {
                     const resp = await HTTPService.get(
-                        getThumbnailUrl(file.id),
+                        getThumbnailUrl(file.id, token),
                         null,
-                        { 'X-Auth-Token': token },
+                        null,
                         { responseType: 'arraybuffer' },
                     );
                     const worker = await new CryptoWorker();
@@ -79,9 +79,9 @@ class DownloadManager {
         }
         if (file.metadata.fileType === 0) {
             const resp = await HTTPService.get(
-                getFileUrl(file.id),
+                getFileUrl(file.id, token),
                 null,
-                { 'X-Auth-Token': token },
+                null,
                 { responseType: 'arraybuffer' },
             );
             const decrypted: any = await worker.decryptFile(
@@ -103,11 +103,7 @@ class DownloadManager {
                 },
             });
         }
-        const resp = await fetch(getFileUrl(file.id), {
-            headers: {
-                'X-Auth-Token': token,
-            },
-        });
+        const resp = await fetch(getFileUrl(file.id, token));
         const reader = resp.body.getReader();
         const stream = new ReadableStream({
             async start(controller) {

@@ -125,9 +125,7 @@ export const getFiles = async (
                     collectionID: collection.id,
                     sinceTime: time,
                     limit,
-                },
-                {
-                    'X-Auth-Token': token,
+                    token,
                 },
             );
 
