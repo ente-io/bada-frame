@@ -61,7 +61,7 @@ export default function Credentials() {
                 setSessionKeys(key);
                 router.push('/gallery');
             } catch (e) {
-                console.error(e);
+                console.warn(`incorrect key`);
                 setFieldError('passphrase', constants.INCORRECT_PASSPHRASE);
             }
         } catch (e) {

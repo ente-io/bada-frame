@@ -44,6 +44,8 @@ export default class MyDocument extends Document {
                     <link rel="icon" type="image/png" href="/images/favicon.png" />
                     <meta name="apple-mobile-web-app-capable" content="yes" />
                     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+                    <meta httpEquiv="Cross-Origin-Opener-Policy" content="same-origin" />
+                    <meta httpEquiv="Cross-Origin-Embedder-Policy" content="require-corp" />
                 </Head>
                 <body>
                     <Main />

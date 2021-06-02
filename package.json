@@ -13,6 +13,7 @@
     "postinstall": "husky install"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.10.0",
     "@sentry/browser": "^5.21.3",
     "@sentry/integrations": "^5.21.3",
     "@sentry/node": "^5.21.3",

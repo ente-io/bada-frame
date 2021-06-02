@@ -220,34 +220,34 @@ export default function Gallery() {
             setFavItemIds(favItemIds);
         } catch (e) {
             switch (e.message) {
-            case errorCodes.ERR_SESSION_EXPIRED:
-                setBannerMessage(constants.SESSION_EXPIRED_MESSAGE);
-                setDialogMessage({
-                    title: constants.SESSION_EXPIRED,
-                    content: constants.SESSION_EXPIRED_MESSAGE,
-                    staticBackdrop: true,
-                    proceed: {
-                        text: constants.LOGIN,
-                        action: logoutUser,
-                        variant: 'success',
-                    },
-                    nonClosable: true,
-                });
-                break;
-            case errorCodes.ERR_NO_INTERNET_CONNECTION:
-                // setBannerMessage(constants.NO_INTERNET_CONNECTION);
-                break;
-            case errorCodes.ERR_KEY_MISSING:
-                clearKeys();
-                router.push('/credentials');
-                break;
+                case errorCodes.ERR_SESSION_EXPIRED:
+                    setBannerMessage(constants.SESSION_EXPIRED_MESSAGE);
+                    setDialogMessage({
+                        title: constants.SESSION_EXPIRED,
+                        content: constants.SESSION_EXPIRED_MESSAGE,
+                        staticBackdrop: true,
+                        proceed: {
+                            text: constants.LOGIN,
+                            action: logoutUser,
+                            variant: 'success',
+                        },
+                        nonClosable: true,
+                    });
+                    break;
+                case errorCodes.ERR_NO_INTERNET_CONNECTION:
+                    // setBannerMessage(constants.NO_INTERNET_CONNECTION);
+                    break;
+                case errorCodes.ERR_KEY_MISSING:
+                    clearKeys();
+                    router.push('/credentials');
+                    break;
             }
         } finally {
             loadingBar.current?.complete();
         }
     };
 
-    const clearSelection = function() {
+    const clearSelection = function () {
         setSelected({ count: 0 });
     };
 
@@ -295,15 +295,15 @@ export default function Gallery() {
         } catch (e) {
             loadingBar.current.complete();
             switch (e.status?.toString()) {
-            case errorCodes.ERR_FORBIDDEN:
-                setDialogMessage({
-                    title: constants.ERROR,
-                    staticBackdrop: true,
-                    close: { variant: 'danger' },
-                    content: constants.NOT_FILE_OWNER,
-                });
-                loadingBar.current.complete();
-                return;
+                case errorCodes.ERR_FORBIDDEN:
+                    setDialogMessage({
+                        title: constants.ERROR,
+                        staticBackdrop: true,
+                        close: { variant: 'danger' },
+                        content: constants.NOT_FILE_OWNER,
+                    });
+                    loadingBar.current.complete();
+                    return;
             }
             setDialogMessage({
                 title: constants.ERROR,

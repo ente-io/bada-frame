@@ -59,7 +59,7 @@ export default function Upload(props: Props) {
         }
     }, [props.acceptedFiles]);
 
-    const uploadInit = function() {
+    const uploadInit = function () {
         setUploadStage(UPLOAD_STAGES.START);
         setFileCounter({ current: 0, total: 0 });
         setFileProgress(new Map<string, number>());

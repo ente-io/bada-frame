@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { getEndpoint } from 'utils/common/apiUtil';
 import { getStripePublishableKey, getToken } from 'utils/common/key';
 import { checkConnectivity, runningInBrowser } from 'utils/common/';
@@ -45,17 +46,17 @@ export const FREE_PLAN = 'free';
 class billingService {
     private stripe: Stripe;
 
-    constructor() {
-        try {
-            const publishableKey = getStripePublishableKey();
-            const main = async () => {
-                this.stripe = await loadStripe(publishableKey);
-            };
-            runningInBrowser() && checkConnectivity() && main();
-        } catch (e) {
-            console.warn(e);
-        }
-    }
+    // constructor() {
+    //     try {
+    //         const publishableKey = getStripePublishableKey();
+    //         const main = async () => {
+    //             this.stripe = await loadStripe(publishableKey);
+    //         };
+    //         runningInBrowser() && checkConnectivity() && main();
+    //     } catch (e) {
+    //         console.warn(e);
+    //     }
+    // }
 
     public async updatePlans() {
         try {
@@ -109,24 +110,24 @@ class billingService {
             );
             const { result } = response.data;
             switch (result.status) {
-            case PAYMENT_INTENT_STATUS.SUCCESS:
-                // subscription updated successfully
-                // no-op required
-                break;
-            case PAYMENT_INTENT_STATUS.REQUIRE_PAYMENT_METHOD:
-                throw new Error(
-                    PAYMENT_INTENT_STATUS.REQUIRE_PAYMENT_METHOD,
-                );
-            case PAYMENT_INTENT_STATUS.REQUIRE_ACTION:
-                {
-                    const { error } = await this.stripe.confirmCardPayment(
-                        result.clientSecret,
+                case PAYMENT_INTENT_STATUS.SUCCESS:
+                    // subscription updated successfully
+                    // no-op required
+                    break;
+                case PAYMENT_INTENT_STATUS.REQUIRE_PAYMENT_METHOD:
+                    throw new Error(
+                        PAYMENT_INTENT_STATUS.REQUIRE_PAYMENT_METHOD,
                     );
-                    if (error) {
-                        throw error;
+                case PAYMENT_INTENT_STATUS.REQUIRE_ACTION:
+                    {
+                        const { error } = await this.stripe.confirmCardPayment(
+                            result.clientSecret,
+                        );
+                        if (error) {
+                            throw error;
+                        }
                     }
-                }
-                break;
+                    break;
             }
         } catch (e) {
             console.error(e);

@@ -1,22 +1,16 @@
 // Use the SentryWebpack plugin to upload the source maps during build step
-const SentryWebpackPlugin = require('@sentry/webpack-plugin');
 const WorkerPlugin = require('worker-plugin');
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
     enabled: process.env.ANALYZE === 'true',
 });
-const withWorkbox = require("next-with-workbox");
+const withWorkbox = require('next-with-workbox');
 
 const {
     NEXT_PUBLIC_SENTRY_DSN: SENTRY_DSN,
-    SENTRY_ORG,
-    SENTRY_PROJECT,
-    SENTRY_AUTH_TOKEN,
-    NODE_ENV,
     GITHUB_COMMIT_SHA: COMMIT_SHA,
 } = process.env;
 
 process.env.SENTRY_DSN = SENTRY_DSN;
-const basePath = '';
 
 module.exports = withWorkbox(withBundleAnalyzer({
     target: 'serverless',
@@ -28,7 +22,7 @@ module.exports = withWorkbox(withBundleAnalyzer({
         NEXT_PUBLIC_COMMIT_SHA: COMMIT_SHA,
     },
     workbox: {
-        swSrc: "src/serviceWorker.js",
+        swSrc: 'src/serviceWorker.js',
     },
     webpack: (config, { isServer, webpack }) => {
         if (!isServer) {
@@ -36,7 +30,7 @@ module.exports = withWorkbox(withBundleAnalyzer({
                 new WorkerPlugin({
                     // use "self" as the global object when receiving hot updates.
                     globalObject: 'self',
-                })
+                }),
             );
             config.resolve.alias['@sentry/node'] = '@sentry/browser';
         }
@@ -45,27 +39,54 @@ module.exports = withWorkbox(withBundleAnalyzer({
         config.plugins.push(
             new webpack.DefinePlugin({
                 'process.env.NEXT_IS_SERVER': JSON.stringify(
-                    isServer.toString()
+                    isServer.toString(),
                 ),
-            })
+            }),
         );
-        if (
-            false &&
-            SENTRY_DSN &&
-            SENTRY_ORG &&
-            SENTRY_PROJECT &&
-            SENTRY_AUTH_TOKEN &&
-            NODE_ENV === 'production'
-        ) {
-            config.plugins.push(
-                new SentryWebpackPlugin({
-                    include: '.next',
-                    ignore: ['node_modules'],
-                    stripPrefix: ['webpack://_N_E/'],
-                    urlPrefix: `~${basePath}/_next`,
-                })
-            );
-        }
+        // if (
+        //     SENTRY_DSN &&
+        //     SENTRY_ORG &&
+        //     SENTRY_PROJECT &&
+        //     SENTRY_AUTH_TOKEN &&
+        //     NODE_ENV === 'production'
+        // ) {
+        //     config.plugins.push(
+        //         new SentryWebpackPlugin({
+        //             include: '.next',
+        //             ignore: ['node_modules'],
+        //             stripPrefix: ['webpack://_N_E/'],
+        //             urlPrefix: `~${basePath}/_next`,
+        //         }),
+        //     );
+        // }
         return config;
+    },
+    headers: async ()=>{
+        return [{
+            source: '/:any', headers: [
+                {
+                    key: 'Cross-Origin-Opener-Policy', value: 'same-origin',
+                },
+                {
+                    key: 'Cross-Origin-Embedder-Policy', value: 'require-corp',
+                },
+                {
+                    key: 'Cross-Origin-Resource-Policy', value: 'cross-origin',
+                },
+            ],
+        },
+        {
+            source: '/_next/static/chunks/:any', headers: [
+                {
+                    key: 'Cross-Origin-Opener-Policy', value: 'same-origin',
+                },
+                {
+                    key: 'Cross-Origin-Embedder-Policy', value: 'require-corp',
+                },
+                {
+                    key: 'Cross-Origin-Resource-Policy', value: 'cross-origin',
+                },
+            ],
+        }];
     },
 }));

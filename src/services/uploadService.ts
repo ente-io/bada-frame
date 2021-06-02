@@ -4,6 +4,7 @@ import { FILE_TYPE } from 'pages/gallery';
 import { checkConnectivity, WaitFor2Seconds } from 'utils/common';
 import {
     ErrorHandler,
+    FFMPEG_LOAD_FAILED,
     THUMBNAIL_GENERATION_FAILED,
 } from 'utils/common/errorUtil';
 import { ComlinkWorker, getDedicatedCryptoWorker } from 'utils/crypto';
@@ -18,6 +19,8 @@ import {
 import { Collection } from './collectionService';
 import { File, fileAttribute } from './fileService';
 import HTTPService from './HTTPService';
+import { createFFmpeg, FFmpeg } from '@ffmpeg/ffmpeg';
+
 
 const ENDPOINT = getEndpoint();
 
@@ -36,7 +39,7 @@ const MIN_STREAM_FILE_SIZE = 20 * 1024 * 1024;
 const CHUNKS_COMBINED_FOR_UPLOAD = 5;
 const RANDOM_PERCENTAGE_PROGRESS_FOR_PUT = () => 90 + 10 * Math.random();
 const NULL_LOCATION: Location = { latitude: null, longitude: null };
-const WAIT_TIME_THUMBNAIL_GENERATION = 30 * 1000;
+const WAIT_TIME_THUMBNAIL_GENERATION = 2 * 1000;
 const FILE_UPLOAD_FAILED = -1;
 const FILE_UPLOAD_SKIPPED = -2;
 const FILE_UPLOAD_COMPLETED = 100;
@@ -108,7 +111,7 @@ interface ProcessedFile {
     metadata: fileAttribute;
     filename: string;
 }
-interface BackupedFile extends Omit<ProcessedFile, 'filename'> {}
+interface BackupedFile extends Omit<ProcessedFile, 'filename'> { }
 
 interface uploadFile extends BackupedFile {
     collectionID: number;
@@ -126,9 +129,13 @@ export enum UPLOAD_STAGES {
 class UploadService {
     private cryptoWorkers = new Array<ComlinkWorker>(MAX_CONCURRENT_UPLOADS);
 
+    private ffmpegWorker: FFmpeg = null;
+
     private uploadURLs: UploadURL[] = [];
 
     private uploadURLFetchInProgress: Promise<any> = null;
+
+    private thumbnailGenerationInProgress: Promise<any> = null;
 
     private perFileProgress: number;
 
@@ -145,9 +152,7 @@ class UploadService {
     private progressBarProps;
 
     private uploadErrors: Error[];
-
     private existingFilesCollectionWise: Map<number, File[]>;
-
     public async uploadFiles(
         filesWithCollectionToUpload: FileWithCollection[],
         existingFiles: File[],
@@ -156,6 +161,7 @@ class UploadService {
         try {
             checkConnectivity();
             progressBarProps.setUploadStage(UPLOAD_STAGES.START);
+
 
             this.filesCompleted = 0;
             this.fileProgress = new Map<string, number>();
@@ -210,6 +216,8 @@ class UploadService {
                 console.error('error fetching uploadURLs', e);
                 ErrorHandler(e);
             }
+            this.ffmpegWorker = await this.getFfmpegInstance();
+
             const uploadProcesses = [];
             for (
                 let i = 0;
@@ -356,14 +364,14 @@ class UploadService {
 
             let fileType: FILE_TYPE;
             switch (receivedFile.type.split('/')[0]) {
-            case TYPE_IMAGE:
-                fileType = FILE_TYPE.IMAGE;
-                break;
-            case TYPE_VIDEO:
-                fileType = FILE_TYPE.VIDEO;
-                break;
-            default:
-                fileType = FILE_TYPE.OTHERS;
+                case TYPE_IMAGE:
+                    fileType = FILE_TYPE.IMAGE;
+                    break;
+                case TYPE_VIDEO:
+                    fileType = FILE_TYPE.VIDEO;
+                    break;
+                default:
+                    fileType = FILE_TYPE.OTHERS;
             }
             if (
                 fileType === FILE_TYPE.OTHERS &&
@@ -388,7 +396,7 @@ class UploadService {
             const metadata = {
                 title: receivedFile.name,
                 creationTime:
-                        creationTime || receivedFile.lastModified * 1000,
+                    creationTime || receivedFile.lastModified * 1000,
                 modificationTime: receivedFile.lastModified * 1000,
                 latitude: location?.latitude,
                 longitude: location?.latitude,
@@ -621,117 +629,147 @@ class UploadService {
         reader: FileReader,
         file: globalThis.File,
     ): Promise<Uint8Array> {
-        try {
-            const canvas = document.createElement('canvas');
-            // eslint-disable-next-line camelcase
-            const canvas_CTX = canvas.getContext('2d');
-            let imageURL = null;
-            if (file.type.match(TYPE_IMAGE) || fileIsHEIC(file.name)) {
-                if (fileIsHEIC(file.name)) {
-                    file = new globalThis.File(
-                        [await convertHEIC2JPEG(file)],
-                        null,
-                        null,
-                    );
-                }
-                let image = new Image();
-                imageURL = URL.createObjectURL(file);
-                image.setAttribute('src', imageURL);
-                await new Promise((resolve, reject) => {
-                    image.onload = () => {
-                        try {
-                            const thumbnailWidth = (image.width * THUMBNAIL_HEIGHT) / image.height;
-                            canvas.width = thumbnailWidth;
-                            canvas.height = THUMBNAIL_HEIGHT;
-                            canvas_CTX.drawImage(
-                                image,
-                                0,
-                                0,
-                                thumbnailWidth,
-                                THUMBNAIL_HEIGHT,
-                            );
-                            image = undefined;
-                            resolve(null);
-                        } catch (e) {
-                            console.error(e);
-                            reject(new Error(`${THUMBNAIL_GENERATION_FAILED} err: ${e}`));
-                        }
-                    };
-                    setTimeout(
-                        () => reject(
-                            new Error(`${THUMBNAIL_GENERATION_FAILED} err:wait time exceeded`),
-                        ),
-                        WAIT_TIME_THUMBNAIL_GENERATION,
-                    );
-                });
-            } else {
-                await new Promise((resolve, reject) => {
-                    let video = document.createElement('video');
-                    imageURL = URL.createObjectURL(file);
-                    video.addEventListener('timeupdate', () => {
-                        try {
-                            const thumbnailWidth = (video.videoWidth * THUMBNAIL_HEIGHT) /
-                                video.videoHeight;
-                            canvas.width = thumbnailWidth;
-                            canvas.height = THUMBNAIL_HEIGHT;
-                            canvas_CTX.drawImage(
-                                video,
-                                0,
-                                0,
-                                thumbnailWidth,
-                                THUMBNAIL_HEIGHT,
-                            );
-                            video = null;
-                            resolve(null);
-                        } catch (e) {
-                            console.error(e);
-                            reject(new Error(`${THUMBNAIL_GENERATION_FAILED} err: ${e}`));
-                        }
-                    });
-                    video.preload = 'metadata';
-                    video.src = imageURL;
-                    video.currentTime = 3;
-                    setTimeout(
-                        () => reject(
-                            new Error(`${THUMBNAIL_GENERATION_FAILED} err:
-                                wait time exceeded`),
-                        ),
-                        WAIT_TIME_THUMBNAIL_GENERATION,
-                    );
-                });
+        let canvas: HTMLCanvasElement = null;
+        if (file.type.match(TYPE_IMAGE) || fileIsHEIC(file.name)) {
+            canvas = await this.generateImageThumbnailWithCanvas(file);
+        } else {
+            try {
+                const thumb = await this.generateThumbnailUsingFfmpeg(reader, file);
+                file = new globalThis.File(
+                    [thumb],
+                    null,
+                    null,
+                );
+                canvas = await this.generateImageThumbnailWithCanvas(file);
+            } catch (e) {
+                console.error('Error generating thumbnail failed with ffmpeg method', e);
+                canvas = await this.generateVideoThumbnailWithCanvas(file);
             }
-            URL.revokeObjectURL(imageURL);
-            let thumbnailBlob = null;
-            let attempts = 0;
-            let quality = 1;
-
-            do {
-                attempts++;
-                quality /= 2;
-                thumbnailBlob = await new Promise((resolve) => {
-                    canvas.toBlob(
-                        (blob) => {
-                            resolve(blob);
-                        },
-                        'image/jpeg',
-                        quality,
-                    );
-                });
-                thumbnailBlob = thumbnailBlob ?? new Blob([]);
-            } while (
-                thumbnailBlob.size > MIN_THUMBNAIL_SIZE &&
-                attempts <= MAX_ATTEMPTS
-            );
-            const thumbnail = await this.getUint8ArrayView(
-                reader,
-                thumbnailBlob,
-            );
-            return thumbnail;
-        } catch (e) {
-            console.error('Error generating thumbnail ', e);
-            throw e;
         }
+        let thumbnailBlob = null;
+        let attempts = 0;
+        let quality = 1;
+        do {
+            attempts++;
+            quality /= 2;
+            thumbnailBlob = await new Promise((resolve) => {
+                canvas.toBlob(
+                    (blob) => {
+                        resolve(blob);
+                    },
+                    'image/jpeg',
+                    quality,
+                );
+            });
+            thumbnailBlob = thumbnailBlob ?? new Blob([]);
+        } while (
+            thumbnailBlob.size > MIN_THUMBNAIL_SIZE &&
+            attempts <= MAX_ATTEMPTS
+        );
+        const thumbnail = await this.getUint8ArrayView(
+            reader,
+            thumbnailBlob,
+        );
+        return thumbnail;
     }
+    private async generateImageThumbnailWithCanvas(file: globalThis.File) {
+        const canvas = document.createElement('canvas');
+        // eslint-disable-next-line camelcase
+        const canvas_CTX = canvas.getContext('2d');
+        let imageURL = null;
+        if (fileIsHEIC(file.name)) {
+            file = new globalThis.File(
+                [await convertHEIC2JPEG(file)],
+                null,
+                null,
+            );
+        }
+        let image = new Image();
+        imageURL = URL.createObjectURL(file);
+        image.setAttribute('src', imageURL);
+        try {
+            await new Promise((resolve, reject) => {
+                image.onload = () => {
+                    try {
+                        const thumbnailWidth = (image.width * THUMBNAIL_HEIGHT) / image.height;
+                        canvas.width = thumbnailWidth;
+                        canvas.height = THUMBNAIL_HEIGHT;
+                        canvas_CTX.drawImage(
+                            image,
+                            0,
+                            0,
+                            thumbnailWidth,
+                            THUMBNAIL_HEIGHT,
+                        );
+                        image = undefined;
+                        resolve(null);
+                    } catch (e) {
+                        console.error(e);
+                        reject(new Error(`${THUMBNAIL_GENERATION_FAILED} err: ${e}`));
+                    }
+                };
+                setTimeout(
+                    () => reject(
+                        new Error(`${THUMBNAIL_GENERATION_FAILED} err:wait time exceeded`),
+                    ),
+                    WAIT_TIME_THUMBNAIL_GENERATION,
+                );
+            });
+        } catch (e) {
+            console.error(e);
+            // ignore;
+        }
+        URL.revokeObjectURL(imageURL);
+        return canvas;
+    }
+    private async generateVideoThumbnailWithCanvas(file: globalThis.File) {
+        const canvas = document.createElement('canvas');
+        // eslint-disable-next-line camelcase
+        const canvas_CTX = canvas.getContext('2d');
+        let videoURL = null;
+        try {
+            await new Promise((resolve, reject) => {
+                let video = document.createElement('video');
+                videoURL = URL.createObjectURL(file);
+                video.addEventListener('timeupdate', () => {
+                    try {
+                        const thumbnailWidth = (video.videoWidth * THUMBNAIL_HEIGHT) /
+                            video.videoHeight;
+                        canvas.width = thumbnailWidth;
+                        canvas.height = THUMBNAIL_HEIGHT;
+                        canvas_CTX.drawImage(
+                            video,
+                            0,
+                            0,
+                            thumbnailWidth,
+                            THUMBNAIL_HEIGHT,
+                        );
+                        video = null;
+                        resolve(null);
+                    } catch (e) {
+                        console.error(e);
+                        reject(new Error(`${THUMBNAIL_GENERATION_FAILED} err: ${e}`));
+                    }
+                });
+                video.preload = 'metadata';
+                video.src = videoURL;
+                video.currentTime = 3;
+                setTimeout(
+                    () => reject(
+                        new Error(`${THUMBNAIL_GENERATION_FAILED} err:
+                        wait time exceeded`),
+                    ),
+                    WAIT_TIME_THUMBNAIL_GENERATION,
+                );
+            });
+        } catch (e) {
+            console.error(e);
+            // ignore;
+        }
+        URL.revokeObjectURL(videoURL);
+        return canvas;
+    }
+
 
     private getFileStream(reader: FileReader, file: globalThis.File) {
         const self = this;
@@ -933,8 +971,8 @@ class UploadService {
                         Math.min(
                             Math.round(
                                 percentPerPart * index +
-                                    (percentPerPart * event.loaded) /
-                                        event.total,
+                                (percentPerPart * event.loaded) /
+                                event.total,
                             ),
                             98,
                         ),
@@ -1040,6 +1078,46 @@ class UploadService {
                 throw e;
             }
         }
+    }
+    private async getFfmpegInstance() {
+        const ffmpeg = createFFmpeg();
+        const IS_COMPATIBLE = typeof SharedArrayBuffer === 'function';
+        if (!IS_COMPATIBLE) {
+            return null;
+        }
+        console.log('Loading ffmpeg-core.js');
+        if (!ffmpeg.isLoaded()) {
+            await ffmpeg.load();
+        }
+        return ffmpeg;
+    }
+    private async generateThumbnailUsingFfmpeg(reader: FileReader, file: globalThis.File) {
+        if (!this.ffmpegWorker) {
+            throw new Error(FFMPEG_LOAD_FAILED);
+        }
+        if (this.thumbnailGenerationInProgress) {
+            this.thumbnailGenerationInProgress = (async () => {
+                await this.thumbnailGenerationInProgress;
+                await WaitFor2Seconds();
+            })();
+            await this.thumbnailGenerationInProgress;
+        }
+        this.thumbnailGenerationInProgress = null;
+        console.log('Start transcoding');
+        this.thumbnailGenerationInProgress = (async (): Promise<Uint8Array> => {
+            this.ffmpegWorker.FS('writeFile', file.name, await this.getUint8ArrayView(
+                reader,
+                file,
+            ));
+
+            await this.ffmpegWorker.run('-i', file.name, '-ss', '00:00:01.000', '-vframes', '1', 'thumb.png');
+            console.log('Complete transcoding');
+            const thumb = this.ffmpegWorker.FS('readFile', 'thumb.png');
+            return thumb;
+        })();
+        const thumbnail = await this.thumbnailGenerationInProgress;
+        this.thumbnailGenerationInProgress = null;
+        return thumbnail;
     }
 }
 
