@@ -16,8 +16,6 @@ import {
     isSubscribed,
 } from 'utils/billingUtil';
 
-import exportService from 'services/exportService';
-import { File } from 'services/fileService';
 import isElectron from 'is-electron';
 import { Collection } from 'services/collectionService';
 import { useRouter } from 'next/router';
@@ -29,7 +27,9 @@ import { SetDialogMessage } from './MessageDialog';
 import EnteSpinner from './EnteSpinner';
 import RecoveryKeyModal from './RecoveryKeyModal';
 import TwoFactorModal from './TwoFactorModal';
+import ExportModal, { ExportStage } from './ExportModal';
 import { SetLoading } from 'pages/gallery';
+import InProgressIcon from './icons/InProgressIcon';
 
 interface Props {
     files: File[];
@@ -49,6 +49,7 @@ export default function Sidebar(props: Props) {
     const [isOpen, setIsOpen] = useState(false);
     const [recoverModalView, setRecoveryModalView] = useState(false);
     const [twoFactorModalView, setTwoFactorModalView] = useState(false);
+    const [exportModalView, setExportModalView] = useState(false);
     useEffect(() => {
         const main = async () => {
             if (!isOpen) {
@@ -74,9 +75,10 @@ export default function Sidebar(props: Props) {
         a.rel = 'noreferrer noopener';
         a.click();
     }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function exportFiles() {
         if (isElectron()) {
-            exportService.exportFiles(props.files, props.collections);
+            setExportModalView(true);
         } else {
             props.setDialogMessage({
                 title: constants.DOWNLOAD_APP,
@@ -242,9 +244,17 @@ export default function Sidebar(props: Props) {
                 >
                     {constants.CHANGE_PASSWORD}
                 </LinkButton>
-                <LinkButton style={{ marginTop: '30px' }} onClick={exportFiles}>
-                    {constants.EXPORT}
-                </LinkButton>
+                <>
+                    <ExportModal show={exportModalView} onHide={() => setExportModalView(false)} usage={usage} />
+                    <LinkButton style={{ marginTop: '30px' }} onClick={exportFiles}>
+                        <div style={{ display: 'flex' }}>
+                            {constants.EXPORT}<div style={{ width: '20px' }} />
+                            {getData(LS_KEYS.EXPORT)?.stage === ExportStage.INPROGRESS &&
+                                <InProgressIcon />
+                            }
+                        </div>
+                    </LinkButton>
+                </>
                 <div
                     style={{
                         height: '1px',
@@ -277,6 +287,6 @@ export default function Sidebar(props: Props) {
                     }}
                 />
             </div>
-        </Menu>
+        </Menu >
     );
 }
